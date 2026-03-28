@@ -1,0 +1,21 @@
+# Web Framework & UI
+streamlit>=1.32.0
+
+# Orchestration & LLM Integration
+langchain>=0.1.13
+langchain-community>=0.0.29
+langchain-core>=0.1.33
+langchain-google-genai>=1.0.1
+
+# Vector Database & Document Processing
+chromadb>=0.4.24
+pypdf>=4.1.0
+
+# Embeddings & Tier 1 Machine Learning Models
+sentence-transformers>=2.5.1
+transformers>=4.38.2
+torch>=2.2.1
+
+# Utilities
+python-dotenv>=1.0.1
+requests>=2.31.0

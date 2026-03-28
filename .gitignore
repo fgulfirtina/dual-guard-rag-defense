@@ -1,0 +1,34 @@
+# =========================
+# Security & Credentials
+# =========================
+.env
+
+# =========================
+# Project Data & Vector DB
+# =========================
+vector_store/
+temp_uploads/
+
+# =========================
+# Python & Environments
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+
+# =========================
+# IDEs & Editors
+# =========================
+.idea/
+*.iml
+.vscode/
+
+# =========================
+# OS Generated Files
+# =========================
+Thumbs.db
+.DS_Store
