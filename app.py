@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import hashlib
+import time
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from layer1_detector import InjectionDetector
@@ -68,15 +69,23 @@ if uploaded:
             f.write(file_bytes)
             
         st.info(f"Initiating Pre-Ingestion Pipeline ({threat_action})...")
+
+        # Start the timer
+        start_time = time.perf_counter()
         
         success, message, logs = ingest_pdf_securely(path, security_mode, threat_action)
+        
+        # Stop the timer and calculate processing time
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
         
         if success:
             st.session_state.processed_file_hash = file_hash
             st.session_state.sanitization_logs = logs 
-            st.success(f"✅ {message}")
+            st.success(f"✅ {message} (Processing time: {elapsed_time:.2f} seconds)")
+            
         else:
-            st.error(f"🚨 {message}")
+            st.error(f"🚨 {message} (Blocking time: {elapsed_time:.2f} seconds)")
             
     else:
         st.success("✅ PDF is already processed and ready for questions.")
@@ -109,13 +118,21 @@ if st.button("Submit", type="primary") and user_input:
             # Layer 1: Query Inspection
             # ---------------------------------------------------------
             st.write("🔍 Layer 1: Inspecting user query for malicious intent...")
+
+            # Start the timer
+            start_time = time.perf_counter()
+            
             report = detector.analyze(user_input)
+
+            # Stop the timer and calculate processing time
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
             
             if report["is_bad"]:
                 status.update(label="Blocked by Guardrails", state="error")
-                st.error(f"🚫 Input blocked by Layer 1 ({report['reason']}). Confidence: {report['confidence']:.2%}")
+                st.error(f"🚫 Input blocked by Layer 1 ({report['reason']}). Confidence: {report['confidence']:.2%} (Blocking time: {elapsed_time:.2f} seconds)")
             else:
-                st.success(f"✅ Layer 1 passed. Malicious confidence: {report['confidence']:.2%}")
+                st.success(f"✅ Layer 1 passed. Malicious confidence: {report['confidence']:.2%} (Processing time: {elapsed_time:.2f} seconds)")
 
                 # ---------------------------------------------------------
                 # RAG Retrieval

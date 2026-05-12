@@ -1,6 +1,7 @@
 import os
 import shutil
 import streamlit as st
+import concurrent.futures
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -41,39 +42,53 @@ def ingest_pdf_securely(file_path: str, security_mode: str, threat_action: str):
     clean_chunks = []
     sanitization_logs = []
     
+    total_chunks = len(raw_chunks)
     progress_text = "Processing document chunks. Please wait..."
     my_bar = st.progress(0, text=progress_text)
     
-    total_chunks = len(raw_chunks)
-    for i, chunk in enumerate(raw_chunks):
-        
-        if "Block" in threat_action:
-            # ==========================================
-            # FAST PATH (Tier 1 Scan Only)
-            # ==========================================
+    if "Block" in threat_action:
+        # ==========================================
+        # FAST PATH (Tier 1 Scan Only - Synchronous)
+        # ==========================================
+        for i, chunk in enumerate(raw_chunks):
             scan_report = doc_scanner.analyze(chunk.page_content)
-            
             if scan_report["is_bad"]:
                 my_bar.empty()
-                
                 return False, f"Upload Rejected! Malicious content found. (Reason: {scan_report['reason']})", []
             else:
                 clean_chunks.append(chunk)
-                
-        else:
-            # ==========================================
-            # SLOW PATH (Tier 2 LLaMA-3 Sanitization)
-            # ==========================================
+            my_bar.progress((i + 1) / total_chunks, text=f"Scanning chunk {i+1} of {total_chunks}")
+            
+    else:
+        # ==========================================
+        # SLOW PATH (Tier 2 LLaMA-3 -	Asynchronous/Multi-Thread)
+        # ==========================================
+        def process_single_chunk(chunk, index):
             safe_text, action_report = sanitize_context(chunk.page_content, mode=security_mode)
-            
-            if action_report and "clean" not in action_report.lower():
-                sanitization_logs.append(f"**Chunk {i+1}:** {action_report}")
-                
-            chunk.page_content = safe_text
-            clean_chunks.append(chunk)
-            
-        my_bar.progress((i + 1) / total_chunks, text=f"Processing chunk {i+1} of {total_chunks}")
+            return chunk, safe_text, action_report, index
+
+        completed_chunks = 0
         
+        # Send Llama 'max_workers' different chunks to process simultaneously 
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+
+            future_to_chunk = {
+                executor.submit(process_single_chunk, chunk, i): i 
+                for i, chunk in enumerate(raw_chunks)
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                chunk, safe_text, action_report, index = future.result()
+                
+                if action_report and "clean" not in action_report.lower():
+                    sanitization_logs.append(f"**Chunk {index+1}:** {action_report}")
+                    
+                chunk.page_content = safe_text
+                clean_chunks.append(chunk)
+                
+                completed_chunks += 1
+                my_bar.progress(completed_chunks / total_chunks, text=f"Sanitized chunk {completed_chunks} of {total_chunks} (Async Mode)")
+
     my_bar.empty()
     
     Chroma.from_documents(clean_chunks, embeddings, persist_directory=CHROMA_PATH)
